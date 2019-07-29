@@ -11,6 +11,7 @@ import (
 //go:generate counterfeiter . CfService
 type CfService interface {
 	GetStartedApps(cliConnection plugin.CliConnection) ([]sdkModels.GetAppsModel, error)
+	GetApp(cliConnection plugin.CliConnection, appName string) (sdkModels.GetAppModel, error)
 	OpenSshTunnel(cliConnection plugin.CliConnection, toService MysqlService, apps []sdkModels.GetAppsModel, localPort int)
 	GetService(connection plugin.CliConnection, name string) (MysqlService, error)
 }
@@ -49,6 +50,10 @@ type cfService struct {
 
 func (self *cfService) GetStartedApps(cliConnection plugin.CliConnection) ([]sdkModels.GetAppsModel, error) {
 	return self.apiClient.GetStartedApps(cliConnection)
+}
+
+func (self *cfService) GetApp(cliConnection plugin.CliConnection, appName string) (sdkModels.GetAppModel, error) {
+	return self.apiClient.GetApp(cliConnection, appName)
 }
 
 func (self *cfService) OpenSshTunnel(cliConnection plugin.CliConnection, toService MysqlService, apps []sdkModels.GetAppsModel, localPort int) {

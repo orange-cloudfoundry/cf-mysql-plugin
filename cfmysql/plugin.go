@@ -3,6 +3,8 @@ package cfmysql
 import (
 	"code.cloudfoundry.org/cli/plugin"
 	"code.cloudfoundry.org/cli/plugin/models"
+	sdkModels "code.cloudfoundry.org/cli/plugin/models"
+	"flag"
 	"fmt"
 	"io"
 )
@@ -33,7 +35,7 @@ func (self *MysqlPlugin) GetMetadata() plugin.PluginMetadata {
 		Name: "mysql",
 		Version: plugin.VersionType{
 			Major: 2,
-			Minor: 0,
+			Minor: 1,
 			Build: 0,
 		},
 		MinCliVersion: plugin.VersionType{
@@ -47,7 +49,7 @@ func (self *MysqlPlugin) GetMetadata() plugin.PluginMetadata {
 				HelpText: "Connect to a MySQL database service",
 				UsageDetails: plugin.Usage{
 					Usage: "Open a mysql client to a database:\n   " +
-						"cf mysql <service-name> [mysql args...]",
+						"cf mysql [-a app-for-ssh] <service-name> [mysql args...]",
 				},
 			},
 			{
@@ -55,9 +57,9 @@ func (self *MysqlPlugin) GetMetadata() plugin.PluginMetadata {
 				HelpText: "Dump a MySQL database",
 				UsageDetails: plugin.Usage{
 					Usage: "Dump all tables in a database:\n   " +
-						"cf mysqldump <service-name> [mysqldump args...]\n   " +
+						"cf mysqldump [-a app-for-ssh] <service-name> [mysqldump args...]\n   " +
 						"Dump specific tables in a database:\n   " +
-						"cf mysqldump <service-name> [tables...] [mysqldump args...]",
+						"cf mysqldump [-a app-for-ssh] <service-name> [tables...] [mysqldump args...]",
 				},
 			},
 		},
@@ -66,6 +68,15 @@ func (self *MysqlPlugin) GetMetadata() plugin.PluginMetadata {
 
 func (self *MysqlPlugin) Run(cliConnection plugin.CliConnection, args []string) {
 	command := args[0]
+	var appSsh string
+
+	flag.StringVar(&appSsh, "a", "", "App to ssh into for dumping/restoring database")
+	err := flag.CommandLine.Parse(args)
+	if err != nil {
+		fmt.Fprint(self.Err, err.Error())
+		self.setErrorExit()
+	}
+	args = flag.CommandLine.Args()
 
 	switch command {
 	case "mysql":
@@ -80,7 +91,7 @@ func (self *MysqlPlugin) Run(cliConnection plugin.CliConnection, args []string) 
 				mysqlArgs = args[2:]
 			}
 
-			self.connectTo(cliConnection, command, dbName, mysqlArgs)
+			self.connectTo(cliConnection, appSsh, command, dbName, mysqlArgs)
 		} else {
 			fmt.Fprint(self.Err, self.FormatUsage())
 			self.setErrorExit()
@@ -122,12 +133,27 @@ type StartedAppsResult struct {
 	Err  error
 }
 
-func (self *MysqlPlugin) connectTo(cliConnection plugin.CliConnection, command string, dbName string, mysqlArgs []string) {
+func (self *MysqlPlugin) connectTo(cliConnection plugin.CliConnection, appSsh string, command string, dbName string, mysqlArgs []string) {
 	appsChan := make(chan StartedAppsResult, 0)
-	go func() {
-		startedApps, err := self.CfService.GetStartedApps(cliConnection)
-		appsChan <- StartedAppsResult{Apps: startedApps, Err: err}
-	}()
+	if appSsh == "" {
+		go func() {
+			startedApps, err := self.CfService.GetStartedApps(cliConnection)
+			appsChan <- StartedAppsResult{Apps: startedApps, Err: err}
+		}()
+	} else {
+		go func() {
+			app, err := self.CfService.GetApp(cliConnection, appSsh)
+			appsChan <- StartedAppsResult{Apps: []sdkModels.GetAppsModel{{
+				Name:             app.Name,
+				Guid:             app.Guid,
+				RunningInstances: app.RunningInstances,
+				TotalInstances:   app.InstanceCount,
+				State:            app.State,
+				DiskQuota:        app.DiskQuota,
+				Memory:           app.Memory,
+			}}, Err: err}
+		}()
+	}
 
 	service, err := self.CfService.GetService(cliConnection, dbName)
 	if err != nil {

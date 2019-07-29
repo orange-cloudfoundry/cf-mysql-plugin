@@ -16,6 +16,7 @@ import (
 //go:generate counterfeiter . ApiClient
 type ApiClient interface {
 	GetStartedApps(cliConnection plugin.CliConnection) ([]sdkModels.GetAppsModel, error)
+	GetApp(cliConnection plugin.CliConnection, appName string) (sdkModels.GetAppModel, error)
 	GetService(cliConnection plugin.CliConnection, spaceGuid string, name string) (pluginModels.ServiceInstance, error)
 	GetServiceKey(cliConnection plugin.CliConnection, serviceInstanceGuid string, keyName string) (key pluginModels.ServiceKey, found bool, err error)
 	CreateServiceKey(cliConnection plugin.CliConnection, serviceInstanceGuid string, keyName string) (pluginModels.ServiceKey, error)
@@ -119,6 +120,18 @@ func (self *apiClient) GetStartedApps(cliConnection plugin.CliConnection) ([]sdk
 	}
 
 	return startedApps, nil
+}
+
+func (self *apiClient) GetApp(cliConnection plugin.CliConnection, appName string) (sdkModels.GetAppModel, error) {
+	app, err := cliConnection.GetApp(appName)
+	if err != nil {
+		return sdkModels.GetAppModel{}, fmt.Errorf("unable to retrieve app '%s': %s", appName, err)
+	}
+	if app.State != "started" {
+		return sdkModels.GetAppModel{}, fmt.Errorf("app '%s' is not started", appName)
+	}
+
+	return app, nil
 }
 
 func (self *apiClient) getFromCfApi(path string, cliConnection plugin.CliConnection) ([]byte, error) {
