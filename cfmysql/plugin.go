@@ -71,12 +71,12 @@ func (self *MysqlPlugin) Run(cliConnection plugin.CliConnection, args []string) 
 	var appSsh string
 
 	flag.StringVar(&appSsh, "a", "", "App to ssh into for dumping/restoring database")
-	err := flag.CommandLine.Parse(args)
+	err := flag.CommandLine.Parse(args[1:])
 	if err != nil {
 		fmt.Fprint(self.Err, err.Error())
 		self.setErrorExit()
 	}
-	args = flag.CommandLine.Args()
+	args = append([]string{command}, flag.CommandLine.Args()...)
 
 	switch command {
 	case "mysql":
